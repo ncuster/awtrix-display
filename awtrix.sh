@@ -7,14 +7,15 @@ if [ -z "$openweatherApiKey" ]; then
     fi
 fi
 
-mqtt='192.168.86.214'
-tc001='http://192.168.86.229/api/notify'
+#mqtt='192.168.86.214'
+mqtt='192.168.0.176'
+tc001='http://192.168.0.202/api/notify'
 tempLat='37.939329576'
 tempLon='-93.401831726'
-waterRefreshIntervalHour=2   # hour % this and that's when we update the water stats from ReST
+waterRefreshIntervalHour=1    # hour % this and that's when we update the water stats from ReST
 tempRefreshIntervalMin=15     # minute % this and that's when we update the temp stats from ReST
-numberOfTransitions=3        # number of things we're displaying
-transitionDuration=6         # seconds for each display on the screen
+numberOfTransitions=5         # number of things we're displaying
+transitionDuration=5         # seconds for each display on the screen
 sleepTime="$(($numberOfTransitions * $transitionDuration))"   # how long to actually sleep
 
 
@@ -50,6 +51,14 @@ function getOutsideTemp {
     fi
 }
 
+function getRetirementDays {
+    retireDate="2030-10-01"
+    currentEpoch=$(date +%s)
+    futureEpoch=$(date -d "$futureDate" +%s)
+    diffDays="$(( (futureEpoch - curentEpoch) / 86400 ))"
+    echo "$diffDays"
+}
+
 function getTextJson {
     text="$1"
     icon="$2"
@@ -70,19 +79,25 @@ while (true); do
     ######### mqtt lake level
     lakeLevel="$(getLakeLevel)"
     echo "$(date):  lakeLevel=$lakeLevel"
-    json="$(getTextJson "$lakeLevel" "waterglass" "8")"
+    json="$(getTextJson "$lakeLevel" "waterglass" "$transitionDuration")"
     mosquitto_pub -h "$mqtt" -m "$json" -t 'awtrix/notify'
 
     ######### mqtt lake release
     lakeDischarge="$(getLakeDischarge)"
     echo "$(date):  lakeDischarge=$lakeDischarge"
-    json="$(getTextJson "$lakeDischarge" "water_leaked" "8")"
+    json="$(getTextJson "$lakeDischarge" "water_leaked" "$transitionDuration")"
     mosquitto_pub -h "$mqtt" -m "$json" -t 'awtrix/notify'
 
     ######### mqtt current temp
     temp="$(getOutsideTemp)"
     echo "$(date):  temp=$temp"
-    json="$(getTextJson "$temp" "temperaturecenter" "8")"
+    json="$(getTextJson "$temp" "temperaturecenter" "$transitionDuration")"
+    mosquitto_pub -h "$mqtt" -m "$json" -t 'awtrix/notify'
+
+    ######### mqtt retirement days
+    val="$(getRetirementDays)"
+    echo "$(date):  days=$val"
+    json="$(getTextJson "$val" "clock" "$transitionDuration")"
     mosquitto_pub -h "$mqtt" -m "$json" -t 'awtrix/notify'
 
     echo "Sleeping for ${sleepTime}s to let things render"
@@ -91,4 +106,3 @@ done
 
 ######### curl
 #curl -kLs -XPOST -H 'Content-Type: application/json' -d "$lakeLevelJSON" "$tc001"
-
